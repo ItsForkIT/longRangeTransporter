@@ -8480,6 +8480,11 @@ void GW_handleNwkDataTraffic(int expShortAddr)
                        }
                        printf("\n");
                    }
+                   printf("Handling Message\n");
+                   for (int i = 0; i < pyldLen; ++i)
+                   {
+                     printf("->%c\n", serInputBuff[27 + i]);
+                   }
                    GW_processRcvdMsg_1(expShortAddr, serInputBuff, UART_MSG_HDR_LEN, currMsgType, pyldLen);
                    memset(serInputBuff, 0, sizeof(serInputBuff));
                    readLen = UART_MSG_HDR_PYLD_CRC_FIELD_OFF;

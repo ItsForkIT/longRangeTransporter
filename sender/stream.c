@@ -272,9 +272,9 @@ int writeToUART(unsigned char *buff_p, unsigned int cnt)
  */
 void print_usage()
 {
-    printf("Usage: ./stream.exe <serial-device> msg_len msg_cnt \n");
+    printf("Usage: ./stream.exe <serial-device> msg_string(max len 111 chars) \n");
     printf("On Cywgin, the serial port device is named /dev/ttySX if the COM port is COMY where X = Y - 1 \n");
-    printf("Example: ./stream.exe /dev/ttyS20 80 1000\n");
+    printf("Example: ./stream.exe /dev/ttyS20 hello!\n");
 }
 
 
@@ -677,6 +677,7 @@ int __sendMsg(int destAddr, int seqNr, int pyldLen)
    printf("Sending msg<%d> of length<%d> to node<%d> ... \n",
           seqNr, pyldLen, destAddr);
 
+   // Sets header of length 6 bytes
    msgLen = DIS_LPWMN_MAC_SHORT_ADDR_LEN + MSG_SEQ_FIELD_LEN + pyldLen;
    
    msg_p = (unsigned char *)malloc(msgLen);
@@ -691,6 +692,98 @@ int __sendMsg(int destAddr, int seqNr, int pyldLen)
    ___htonl(msg_p + DIS_LPWMN_MAC_SHORT_ADDR_LEN, seqNr);  
 
    memset(msg_p + DIS_LPWMN_MAC_SHORT_ADDR_LEN + MSG_SEQ_FIELD_LEN, 'a' + (seqNr%26), pyldLen);
+   
+   // Print the message
+   for (int i = 0; i < pyldLen; ++i)
+   {
+     printf("->%c\n", msg_p[6+i]);
+   }
+
+   rc = GW_buildSendHdr(DIS_MSG_TYPE_STREAM_SEGMENT, msg_p, msgLen);
+   if (rc != 1)
+       return rc;
+
+   printf("Sent hdr to attached node .... \n", msgLen);
+
+   rc = GW_readSerIntf(UART_MSG_TYPE_ACK, 0);
+   if (rc != 0)
+       return rc;
+
+   if (hdrAcked == 0x0)
+   {
+       printf("Ack indicates failure <0x%x>!! \n", hdrFlags);
+       return -2;
+   }
+
+   printf("Rcvd hdr ack ... \n");
+
+   // Send payload
+   rc = writePort(msg_p, msgLen);
+   if (rc != 1)
+   {
+       printf("writePort(%d) failed !! \n", msgLen);
+       return -3;
+   }
+   else
+       printf("Sent msg of total length<%u> to attached node ... \n", pyldLen);
+   
+   rc = GW_readSerIntf(UART_MSG_TYPE_STREAM_TX_STS, 0);
+
+   if (hdrFlags == 0)
+   {
+       rc = 0;
+       printf("Message could not be sent to %d \n", destAddr);
+   }
+   else
+   {
+       printf("Message sent ....  \n", destAddr);
+       rc = 1;
+   }
+
+   printf("rcvd msg ack  ....\n");
+   printf("\n------------------------------------------------------------ \n");
+       
+   return rc;
+}
+
+
+int __sendMsg_string(int destAddr, int pyldLen, char *msg_string)
+{
+   int rc, msgLen;
+   unsigned char *msg_p; 
+
+   printf("\n------------------------------------------------------------ \n");
+   // printf("Sending msg<%d> of length<%d> to node<%d> ... \n",
+   //        1, pyldLen, destAddr);
+
+   // Sets header of length 6 bytes
+   msgLen = DIS_LPWMN_MAC_SHORT_ADDR_LEN + MSG_SEQ_FIELD_LEN + pyldLen;
+   
+   msg_p = (unsigned char *)malloc(msgLen);
+   if (msg_p == NULL)
+   {
+       printf("malloc(%d) failed !! \n", pyldLen);
+       return -1;
+   }
+
+   ___htons(msg_p, destAddr);  
+
+   ___htonl(msg_p + DIS_LPWMN_MAC_SHORT_ADDR_LEN, 1);  
+
+   // memset(msg_p + DIS_LPWMN_MAC_SHORT_ADDR_LEN + MSG_SEQ_FIELD_LEN, 'a' + (seqNr%26), pyldLen);
+
+   // Store the message
+   for (int i = 0; i < pyldLen; ++i)
+   {
+     msg_p[6 + i] = msg_string[i];
+     // printf("->%c\n", msg_p[6+i]);
+   }
+   
+   // Print the message
+   for (int i = 0; i < pyldLen; ++i)
+   {
+     printf("->%c\n", msg_p[6+i]);
+   }
 
    rc = GW_buildSendHdr(DIS_MSG_TYPE_STREAM_SEGMENT, msg_p, msgLen);
    if (rc != 1)
@@ -752,7 +845,7 @@ int main(int argc, const char* argv[])
 {
     int rc = 0, idx, msgCnt = 0, msgLen = 0;
 
-    if (argc < 4)
+    if (argc < 3)
     {
         print_usage();
         return 1;
@@ -761,27 +854,37 @@ int main(int argc, const char* argv[])
     if (cfgPort((char *)argv[1], B9600) < 0)
         return 2;
 
-    msgCnt = atoi(argv[3]);
-    if (msgCnt <= 0)
-    {
-        printf("msgcnt should be > 0 !! \n");
-	return 1;
-    }
+    char msg_str[111];
+    int msg_len;
 
-    msgLen = atoi(argv[2]);
-    if (msgLen <= 0 || msgLen > 111) 
-    {
-        printf("msgLen should be > 0 && <= 111 !! \n");
-	return 2;
-    }
+    strcpy(msg_str, argv[2]);
+    msg_len = strlen(msg_str);
 
-    for (idx=0; idx<msgCnt; idx++)
-    {
-         if (__sendMsg(1, idx + 1, msgLen) <= 0)
-             break;
-    }
+    __sendMsg_string(1, msg_len, msg_str);
 
-    printf("\ndone \n");
+    // printf("%d\n", strlen(msg_str));
+
+ //    msgCnt = atoi(argv[3]);
+ //    if (msgCnt <= 0)
+ //    {
+ //        printf("msgcnt should be > 0 !! \n");
+	// return 1;
+ //    }
+
+ //    msgLen = atoi(argv[2]);
+ //    if (msgLen <= 0 || msgLen > 111) 
+ //    {
+ //        printf("msgLen should be > 0 && <= 111 !! \n");
+	// return 2;
+ //    }
+
+ //    for (idx=0; idx<msgCnt; idx++)
+ //    {
+ //         if (__sendMsg(1, idx + 1, msgLen) <= 0)
+ //             break;
+ //    }
+
+ //    printf("\ndone \n");
      
     return 0;
 }
