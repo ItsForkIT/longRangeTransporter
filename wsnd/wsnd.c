@@ -12,6 +12,7 @@
 #include <dis.h>
 #include <gw.h>
 #include <libgen.h>
+#include <unistd.h>
 
 static cntxt_s uart_cntxt;
 int hdrAcked = 1;
@@ -678,6 +679,7 @@ int main(int argc, const char* argv[] )
     file = fopen(argv[3], "r");
     if (file) {
         while ((nread = fread(buf, 1, sizeof buf, file)) > 0){
+                sleep(5);
                 // fwrite(buf, 1, nread, stdout);
                 printf("Sending msg chunk ...\n");
                 msg_type = 2;
@@ -688,7 +690,7 @@ int main(int argc, const char* argv[] )
                 memcpy(message+4, buf, msg_len);
   
                 // printf("PAYLOAD+: %s\n", message+4);
-                __send(dstShortAddr, msg_len, message);
+                __send(dstShortAddr, 80, message);
               }
 
         if (ferror(file)) {
@@ -705,7 +707,7 @@ int main(int argc, const char* argv[] )
     memcpy(message+2, (void *)&msg_len, 2);
 
     // printf("PAYLOAD+: %s\n", message+4);
-    __send(dstShortAddr, msg_len, message);
+    __send(dstShortAddr, 80, message);
 
 
     // infoLen = strlen(argv[3]) + 1;
