@@ -607,7 +607,7 @@ unsigned char infoBuff[64];
 int main(int argc, const char* argv[] )
 {
     int rc = 0, idx, dstShortAddr = -1, infoLen = -1;
-
+    char *message;
     if (argc < 4)
     {
         print_usage();
@@ -628,23 +628,23 @@ int main(int argc, const char* argv[] )
     if (verbose)
         printf("dsa: %d  \n", dstShortAddr);
 
-    if (sscanf(argv[3], "%d", &infoLen) != 1
-        || infoLen < 1 || infoLen > 80)
-    {
-        printf("Please enter valid msg length (1 to 80) !! \n", infoLen);
-	return 3;
-    }
+    infoLen = strlen(argv[3]) + 1;
+
+    message = (char *)malloc(infoLen + 1);
+
+    strcpy(message, argv[3]);
+
+    printf("->%s\n", message);
+    printf("->%d\n", infoLen);
 
     if (verbose)
         printf("infoLen: %d  \n", infoLen);
 
-    {
-       int idx;
-       for (idx=0; idx<infoLen; idx++)
-            infoBuff[idx] = 'a' +  (idx % 26);
+    if(infoLen > 80){
+      return 3;
     }
 
-    __send(dstShortAddr, infoLen, infoBuff);
+    __send(dstShortAddr, infoLen, message);
 
     return 0;
 }
