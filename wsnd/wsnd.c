@@ -11,6 +11,7 @@
 #include <wsuart.h>
 #include <dis.h>
 #include <gw.h>
+#include <libgen.h>
 
 static cntxt_s uart_cntxt;
 int hdrAcked = 1;
@@ -587,7 +588,7 @@ void __send(int shortAddr, int infoLen, unsigned char *infoBuff_p)
  */
 void print_usage()
 {
-    printf("Usage: ./wsnd.exe <serial-device> <short_addr> <pyld_len>\n");
+    printf("Usage: ./wsnd.exe <serial-device> <short_addr> <file_path>\n");
     printf("On Cywgin, the serial port device is named /dev/ttySX if the COM port is COMY where X = Y - 1 \n");
     printf("Example: ./wsnd.exe /dev/ttyS20 100 32\n");
 }
@@ -607,7 +608,6 @@ unsigned char infoBuff[64];
 int main(int argc, const char* argv[] )
 {
     int rc = 0, idx, dstShortAddr = -1, infoLen = -1;
-    char *message;
     if (argc < 4)
     {
         print_usage();
@@ -628,23 +628,103 @@ int main(int argc, const char* argv[] )
     if (verbose)
         printf("dsa: %d  \n", dstShortAddr);
 
-    infoLen = strlen(argv[3]) + 1;
+    char buf[76]; // MAX Message chunk payload of 76
 
-    message = (char *)malloc(infoLen + 1);
 
-    strcpy(message, argv[3]);
+    // =============================================================================================
 
-    printf("->%s\n", message);
-    printf("->%d\n", infoLen);
+    // MESSAGE FORMAT:
 
-    if (verbose)
-        printf("infoLen: %d  \n", infoLen);
+    // --------------------------------------------------------------------------------------
+    // | Message Type int 2bytes | Message Length int 2bytes | Message payload max 76 bytes |
+    // --------------------------------------------------------------------------------------
 
-    if(infoLen > 80){
-      return 3;
+    // MESSAGE TYPES:
+
+    // 1: INITIALIZE TRANSFER : Payload: filename
+    // 2: FILE CONTENT: Payload: file content
+    // 3: END : null
+
+    // =============================================================================================
+
+    char *message;
+    int16_t msg_type;
+    int16_t msg_len;
+
+    message = (void *)malloc(80);
+
+    // Read File
+    FILE *file;
+    size_t nread;
+
+    // Read file name
+    char *filename;
+    filename = basename((char *)argv[3]);
+    
+    // INITIALIZE FILE TRANSFER
+    printf("Initializing File Transfer <%s>..\n", filename);
+    printf("====================================\n");
+    msg_type = 1;
+    msg_len = strlen(filename);
+
+    memcpy(message, (void *)&msg_type, 2);
+    memcpy(message+2, (void *)&msg_len, 2);
+    memcpy(message+4, filename, msg_len);
+
+    // printf("PAYLOAD: %s\n", message+4);
+    __send(dstShortAddr, 80, message);
+
+
+    file = fopen(argv[3], "r");
+    if (file) {
+        while ((nread = fread(buf, 1, sizeof buf, file)) > 0){
+                // fwrite(buf, 1, nread, stdout);
+                printf("Sending msg chunk ...\n");
+                msg_type = 2;
+                msg_len = nread;
+  
+                memcpy(message, (void *)&msg_type, 2);
+                memcpy(message+2, (void *)&msg_len, 2);
+                memcpy(message+4, buf, msg_len);
+  
+                // printf("PAYLOAD+: %s\n", message+4);
+                __send(dstShortAddr, msg_len, message);
+              }
+
+        if (ferror(file)) {
+            /* deal with error */
+        }
+        fclose(file);
     }
 
-    __send(dstShortAddr, infoLen, message);
+    printf("Finishing Transfer ...\n");
+    msg_type = 3;
+    msg_len = 0;
+
+    memcpy(message, (void *)&msg_type, 2);
+    memcpy(message+2, (void *)&msg_len, 2);
+
+    // printf("PAYLOAD+: %s\n", message+4);
+    __send(dstShortAddr, msg_len, message);
+
+
+    // infoLen = strlen(argv[3]) + 1;
+
+    // message = (char *)malloc(infoLen + 1);
+
+    // strcpy(message, argv[3]);
+
+    // printf("->%s\n", message);
+    // printf("->%d\n", infoLen);
+
+    // if (verbose)
+    //     printf("infoLen: %d  \n", infoLen);
+
+    // if(infoLen > 80){
+    //   return 3;
+    // }
+
+    // __send(dstShortAddr, infoLen, message);
 
     return 0;
 }
