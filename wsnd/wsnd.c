@@ -652,7 +652,7 @@ int main(int argc, const char* argv[] )
     int16_t msg_type;
     int16_t msg_len;
 
-    message = (void *)malloc(80);
+    message = (void *)calloc(80, sizeof(char));
 
     // Read File
     FILE *file;
@@ -672,14 +672,14 @@ int main(int argc, const char* argv[] )
     memcpy(message+2, (void *)&msg_len, 2);
     memcpy(message+4, filename, msg_len);
 
-    // printf("PAYLOAD: %s\n", message+4);
+    printf("PAYLOAD: %s\n", message+4);
     __send(dstShortAddr, 80, message);
 
 
     file = fopen(argv[3], "r");
     if (file) {
         while ((nread = fread(buf, 1, sizeof buf, file)) > 0){
-                sleep(5);
+                sleep(1);
                 // fwrite(buf, 1, nread, stdout);
                 printf("Sending msg chunk ...\n");
                 msg_type = 2;
@@ -701,12 +701,14 @@ int main(int argc, const char* argv[] )
 
     printf("Finishing Transfer ...\n");
     msg_type = 3;
-    msg_len = 0;
+    msg_len = strlen(filename);
 
     memcpy(message, (void *)&msg_type, 2);
     memcpy(message+2, (void *)&msg_len, 2);
+    memcpy(message+4, filename, msg_len);
 
     // printf("PAYLOAD+: %s\n", message+4);
+    sleep(1);
     __send(dstShortAddr, 80, message);
 
 
